@@ -301,6 +301,7 @@
       .wrapper { margin: 0; padding: 0; max-width: 100%; }
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
 
@@ -560,7 +561,7 @@
   <div class="nav-buttons">
     <button class="btn-nav btn-prev" id="btnPrev" onclick="cambiarPaso(-1)" style="display:none">◀ Anterior</button>
     <div style="flex:1"></div>
-    <button class="btn-print" onclick="window.print()" id="btnPrint" style="display:none">🖨️ Imprimir / PDF</button>
+    <button class="btn-print" onclick="generarPDF()" id="btnPrint" style="display:none">🖨️ Descargar PDF</button>
     <button class="btn-nav btn-next" id="btnNext" onclick="cambiarPaso(1)">Siguiente ▶</button>
   </div>
 
@@ -657,6 +658,66 @@
 
   initCanvas('firmaTecnico');
   initCanvas('firmaDirector');
+
+  // GENERAR PDF
+  function generarPDF() {
+    const btn = document.getElementById('btnPrint');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = 'Generando PDF...';
+    btn.disabled = true;
+
+    // Mostrar todas las secciones
+    document.querySelectorAll('.section-card').forEach(c => {
+      c.style.display = 'block';
+      c.style.boxShadow = 'none';
+      c.style.marginBottom = '20px';
+    });
+    
+    // Ajustar altura de textareas para que se vea todo el texto
+    const textareas = [];
+    document.querySelectorAll('textarea').forEach(ta => {
+      textareas.push({ el: ta, height: ta.style.height });
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    });
+
+    // Ocultar elementos de la UI
+    const hideSelectors = ['header', 'footer', '.nav-buttons', '.step-indicator', '.progress-bar-outer', '.progress-label', '.email-section', '.btn-clear-firma'];
+    const hiddenElements = [];
+    hideSelectors.forEach(selector => {
+      document.querySelectorAll(selector).forEach(el => {
+        hiddenElements.push({ el, display: el.style.display });
+        el.style.display = 'none';
+      });
+    });
+
+    const element = document.querySelector('.wrapper');
+    const opt = {
+      margin:       10,
+      filename:     'Checklist_Equipos.pdf',
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(element).save().then(() => {
+      // Restaurar la vista
+      document.querySelectorAll('.section-card').forEach(c => {
+        c.style.display = '';
+        c.style.boxShadow = '';
+        c.style.marginBottom = '';
+      });
+      textareas.forEach(item => {
+        item.el.style.height = item.height;
+      });
+      hiddenElements.forEach(item => {
+        item.el.style.display = item.display;
+      });
+      actualizarUI();
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    });
+  }
 
   // ENVIAR POR CORREO
   function enviarPorCorreo() {
