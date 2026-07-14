@@ -769,20 +769,29 @@
   }
 
   // GENERAR PDF
-  function generarPDF() {
+  async function guardarPdfCompleto() {
+    // Verificar que la librería esté cargada
+    if (typeof html2pdf === 'undefined') {
+      alert('Error: la librería html2pdf no se cargó. Verifica tu conexión a internet y vuelve a intentarlo.');
+      return;
+    }
+
     const btn = document.getElementById('btnPrint');
     const originalText = btn.innerHTML;
-    btn.innerHTML = 'Generando PDF...';
+    btn.innerHTML = '⏳ Generando PDF...';
     btn.disabled = true;
 
     // Mostrar todas las secciones
-    document.querySelectorAll('.section-card').forEach(c => {
+    const sectionCards = document.querySelectorAll('.section-card');
+    const estadosOriginales = [];
+    sectionCards.forEach(c => {
+      estadosOriginales.push({ display: c.style.display, boxShadow: c.style.boxShadow, marginBottom: c.style.marginBottom });
       c.style.display = 'block';
       c.style.boxShadow = 'none';
       c.style.marginBottom = '20px';
     });
-    
-    // Ajustar altura de textareas para que se vea todo el texto
+
+    // Ajustar altura de textareas
     const textareas = [];
     document.querySelectorAll('textarea').forEach(ta => {
       textareas.push({ el: ta, height: ta.style.height });
@@ -805,33 +814,36 @@
 
     const element = document.querySelector('.wrapper');
     const opt = {
-      margin:       10,
-      filename:     'Checklist_Equipos.pdf',
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      margin:      10,
+      filename:    'Checklist_Equipos.pdf',
+      image:       { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    html2pdf().set(opt).from(element).save().then(() => {
-      // Restaurar la vista
-      document.querySelectorAll('.section-card').forEach(c => {
-        c.style.display = '';
-        c.style.boxShadow = '';
-        c.style.marginBottom = '';
+    function restaurar() {
+      sectionCards.forEach((c, i) => {
+        c.style.display    = estadosOriginales[i].display;
+        c.style.boxShadow  = estadosOriginales[i].boxShadow;
+        c.style.marginBottom = estadosOriginales[i].marginBottom;
       });
-      textareas.forEach(item => {
-        item.el.style.height = item.height;
-      });
-      hiddenElements.forEach(item => {
-        item.el.style.display = item.display;
-      });
-      // Limpiar sección PDF de fotos
+      textareas.forEach(item => { item.el.style.height = item.height; });
+      hiddenElements.forEach(item => { item.el.style.display = item.display; });
       const pdfSec = document.getElementById('pdfFotosSection');
       if (pdfSec) pdfSec.remove();
       actualizarUI();
       btn.innerHTML = originalText;
       btn.disabled = false;
-    });
+    }
+
+    try {
+      await html2pdf().set(opt).from(element).save();
+    } catch (err) {
+      alert('Error al generar el PDF: ' + err.message);
+      console.error(err);
+    } finally {
+      restaurar();
+    }
   }
 
   // ENVIAR POR CORREO
