@@ -309,6 +309,50 @@
       border: 1px solid #ddd;
     }
 
+    /* PDF MODE – se aplica via JS antes de capturar */
+    body.pdf-mode {
+      background: #fff !important;
+    }
+    body.pdf-mode .wrapper {
+      margin: 0 auto !important;
+      padding-top: 0 !important;
+      max-width: 100% !important;
+    }
+    body.pdf-mode header {
+      padding-bottom: 0 !important;
+    }
+    /* Cada section-card evita ser cortada a la mitad */
+    body.pdf-mode .section-card {
+      box-shadow: none !important;
+      margin-bottom: 16px !important;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    /* Bloques internos críticos también evitan cortes */
+    body.pdf-mode .diag-block,
+    body.pdf-mode .firmas-section,
+    body.pdf-mode .datos-card,
+    body.pdf-mode .firma-box {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    /* Galería de fotos: inline-block para que page-break funcione */
+    body.pdf-mode .pdf-foto-item {
+      display: inline-block;
+      margin: 6px;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      vertical-align: top;
+    }
+    body.pdf-mode .pdf-foto-item img {
+      width: 130px;
+      height: 130px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      display: block;
+    }
+
     /* PRINT */
     @media print {
       header, footer, .nav-buttons, .step-indicator, .progress-bar-outer, .progress-label, .email-section, .btn-print, .btn-clear-firma { display: none !important; }
@@ -751,28 +795,27 @@
           <div class="sec-num">10</div>
           <h2>Evidencia fotográfica</h2>
         </div>
-        <div class="section-body">
-          <div class="galeria-fotos" id="pdfGaleriaFotos" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
-        </div>
+        <div class="section-body" id="pdfGaleriaFotos" style="padding:16px; line-height:0;"></div>
       `;
       wrapper.appendChild(seccionPdf);
     }
     const cont = seccionPdf.querySelector('#pdfGaleriaFotos');
     cont.innerHTML = '';
     fotosChecklist.forEach((foto, idx) => {
+      const item = document.createElement('div');
+      item.className = 'pdf-foto-item';
       const img = document.createElement('img');
       img.src = foto.dataUrl;
-      img.alt = `Foto PDF ${idx + 1}`;
-      img.style.cssText = 'width:90px;height:90px;object-fit:cover;border-radius:6px;border:1px solid #ddd;';
-      cont.appendChild(img);
+      img.alt = `Foto ${idx + 1}`;
+      item.appendChild(img);
+      cont.appendChild(item);
     });
   }
 
   // GENERAR PDF
   async function guardarPdfCompleto() {
-    // Verificar que la librería esté cargada
     if (typeof html2pdf === 'undefined') {
-      alert('Error: la librería html2pdf no se cargó. Verifica tu conexión a internet y vuelve a intentarlo.');
+      alert('Error: la librería html2pdf no se cargó. Verifica tu conexión a internet.');
       return;
     }
 
@@ -780,55 +823,66 @@
     const originalText = btn.innerHTML;
     btn.innerHTML = '⏳ Generando PDF...';
     btn.disabled = true;
+    window.scrollTo(0, 0);
 
-    // Mostrar todas las secciones
-    const sectionCards = document.querySelectorAll('.section-card');
-    const estadosOriginales = [];
-    sectionCards.forEach(c => {
-      estadosOriginales.push({ display: c.style.display, boxShadow: c.style.boxShadow, marginBottom: c.style.marginBottom });
-      c.style.display = 'block';
-      c.style.boxShadow = 'none';
-      c.style.marginBottom = '20px';
+    const esMovil = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const escala  = esMovil ? 1 : 2;
+
+    // ── 1. Mostrar todas las secciones ────────────────────────────────
+    const cards = document.querySelectorAll('.section-card');
+    cards.forEach(c => {
+      c.style.display      = 'block';
+      c.style.boxShadow    = 'none';
+      c.style.marginBottom = '12px';
     });
 
-    // Ajustar altura de textareas
-    const textareas = [];
+    // ── 2. Expandir textareas ─────────────────────────────────────────
+    const taStates = [];
     document.querySelectorAll('textarea').forEach(ta => {
-      textareas.push({ el: ta, height: ta.style.height });
+      taStates.push({ el: ta, h: ta.style.height });
       ta.style.height = 'auto';
       ta.style.height = ta.scrollHeight + 'px';
     });
 
-    // Ocultar elementos de la UI
-    const hideSelectors = ['header', 'footer', '.nav-buttons', '.step-indicator', '.progress-bar-outer', '.progress-label', '.email-section', '.btn-clear-firma'];
-    const hiddenElements = [];
-    hideSelectors.forEach(selector => {
-      document.querySelectorAll(selector).forEach(el => {
-        hiddenElements.push({ el, display: el.style.display });
+    // ── 3. Ocultar elementos de UI ────────────────────────────────────
+    const uiStates = [];
+    ['header', 'footer', '.nav-buttons', '.step-indicator',
+     '.progress-bar-outer', '.progress-label', '.email-section',
+     '.btn-clear-firma', '.btn-print'].forEach(sel => {
+      document.querySelectorAll(sel).forEach(el => {
+        uiStates.push({ el, d: el.style.display });
         el.style.display = 'none';
       });
     });
 
-    // Incluir fotos en el PDF
+    // ── 4. Resetear márgenes del wrapper ─────────────────────────────
+    const wrapper = document.querySelector('.wrapper');
+    const wSt = { mt: wrapper.style.marginTop, pt: wrapper.style.paddingTop, mw: wrapper.style.maxWidth };
+    wrapper.style.marginTop  = '0';
+    wrapper.style.paddingTop = '0';
+    wrapper.style.maxWidth   = '100%';
+
+    // ── 5. Fotos ──────────────────────────────────────────────────────
     asegurarSeccionFotosEnHtml();
 
-    const element = document.querySelector('.wrapper');
+    await new Promise(r => setTimeout(r, 150));
+
     const opt = {
-      margin:      10,
+      margin:      12,
       filename:    'Checklist_Equipos.pdf',
-      image:       { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      image:       { type: 'jpeg', quality: 0.92 },
+      html2canvas: { scale: escala, useCORS: true, logging: false, scrollX: 0, scrollY: 0 },
+      jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak:   { mode: ['css', 'legacy'] }
     };
 
     function restaurar() {
-      sectionCards.forEach((c, i) => {
-        c.style.display    = estadosOriginales[i].display;
-        c.style.boxShadow  = estadosOriginales[i].boxShadow;
-        c.style.marginBottom = estadosOriginales[i].marginBottom;
-      });
-      textareas.forEach(item => { item.el.style.height = item.height; });
-      hiddenElements.forEach(item => { item.el.style.display = item.display; });
+      cards.forEach(c => { c.style.display = ''; c.style.boxShadow = ''; c.style.marginBottom = ''; });
+      taStates.forEach(s => { s.el.style.height = s.h; });
+      uiStates.forEach(s => { s.el.style.display = s.d; });
+      wrapper.style.marginTop  = wSt.mt;
+      wrapper.style.paddingTop = wSt.pt;
+      wrapper.style.maxWidth   = wSt.mw;
       const pdfSec = document.getElementById('pdfFotosSection');
       if (pdfSec) pdfSec.remove();
       actualizarUI();
@@ -837,7 +891,7 @@
     }
 
     try {
-      await html2pdf().set(opt).from(element).save();
+      await html2pdf().set(opt).from(wrapper).save();
     } catch (err) {
       alert('Error al generar el PDF: ' + err.message);
       console.error(err);
